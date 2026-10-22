@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carrinho — Pequenos Mimos</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#faf8f6;color:#3f3632}
+  .wrap{max-width:720px;margin:0 auto;padding:20px}
+  h1{font-size:28px;margin:8px 0 4px}
+  .sub{margin:0 0 20px;color:#756b66}
+  .card{background:#fff;border:1px solid #eadfd9;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 2px 8px #00000008}
+  .row{display:flex;justify-content:space-between;gap:12px;align-items:center}
+  .name{font-weight:700}.price{white-space:nowrap}
+  .qty{display:flex;align-items:center;gap:8px;margin-top:10px}
+  button{border:0;border-radius:10px;padding:9px 13px;cursor:pointer;font-weight:650}
+  .qty button{background:#f0e8e3}
+  .remove{background:none;color:#a45b50;padding:4px}
+  .total{font-size:20px;font-weight:800;margin-top:16px}
+  .wa{width:100%;margin-top:14px;background:#25D366;color:white;font-size:16px;padding:14px}
+  .empty{text-align:center;padding:35px 10px;color:#756b66}
+  .hint{font-size:12px;color:#8a7d76;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Meu carrinho</h1>
+  <p class="sub">Pequenos Mimos</p>
+  <div id="cart"></div>
+  <div id="summary" class="card" style="display:none">
+    <div class="row"><span>Total</span><span id="total" class="total">R$ 0,00</span></div>
+    <button class="wa" onclick="sendWhatsApp()">Enviar pedido pelo WhatsApp</button>
+  </div>
+  <p class="hint">Seu carrinho fica salvo neste navegador. Ao enviar, o pedido será aberto no WhatsApp para você confirmar com a loja.</p>
+</div>
+<script>
+/*
+  CONFIGURAÇÃO:
+  1) Troque WHATSAPP pelo número da loja, com código do país e DDD,
+     somente números. Ex.: 5584999999999
+*/
+const WHATSAPP = "SEU_NUMERO_AQUI";
+const KEY = "pequenos_mimos_carrinho_v1";
+
+let cart = JSON.parse(localStorage.getItem(KEY) || "[]");
+
+const money = v => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
+
+function save(){ localStorage.setItem(KEY, JSON.stringify(cart)); render(); }
+
+function addProduct(name, price){
+  price = Number(price);
+  if(!name || !Number.isFinite(price)) return;
+  const item = cart.find(x => x.name === name && x.price === price);
+  if(item) item.qty++;
+  else cart.push({name, price, qty:1});
+  save();
+}
+
+function change(i, delta){
+  cart[i].qty += delta;
+  if(cart[i].qty <= 0) cart.splice(i,1);
+  save();
+}
+
+function removeItem(i){ cart.splice(i,1); save(); }
+
+function render(){
+  const el = document.getElementById("cart");
+  const summary = document.getElementById("summary");
+  if(!cart.length){
+    el.innerHTML = '<div class="card empty">Seu carrinho está vazio.<br>Volte à loja e toque em “Quero Esse Mimo!” para adicionar um produto.</div>';
+    summary.style.display = "none";
+    return;
+  }
+  el.innerHTML = cart.map((x,i)=>`
+    <div class="card">
+      <div class="row"><span class="name">${escapeHtml(x.name)}</span><span class="price">${money(x.price)}</span></div>
+      <div class="row">
+        <div class="qty">
+          <button onclick="change(${i},-1)">−</button>
+          <strong>${x.qty}</strong>
+          <button onclick="change(${i},1)">+</button>
+        </div>
+        <button class="remove" onclick="removeItem(${i})">remover</button>
+      </div>
+    </div>`).join("");
+  const total = cart.reduce((s,x)=>s+x.price*x.qty,0);
+  document.getElementById("total").textContent = money(total);
+  summary.style.display = "block";
+}
+
+function sendWhatsApp(){
+  if(!cart.length) return;
+  if(WHATSAPP === "SEU_NUMERO_AQUI"){
+    alert("Antes de publicar, coloque o número do WhatsApp da loja no campo WHATSAPP do arquivo.");
+    return;
+  }
+  const lines = cart.map(x => `• ${x.name} — ${x.qty} x ${money(x.price)}`);
+  const total = cart.reduce((s,x)=>s+x.price*x.qty,0);
+  const text = [
+    "Olá! Quero fazer este pedido pela loja Pequenos Mimos:",
+    "",
+    ...lines,
+    "",
+    `Total dos produtos: ${money(total)}`,
+    "",
+    "Gostaria de confirmar disponibilidade, entrega e forma de pagamento."
+  ].join("\n");
+  window.open(`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(text)}`, "_blank");
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+}
+
+/* Aceita produto enviado pelo botão do Notion:
+   cart.html?produto=Flor%20Grande&preco=20
+*/
+const params = new URLSearchParams(location.search);
+if(params.has("produto") && params.has("preco")){
+  addProduct(params.get("produto"), params.get("preco"));
+  history.replaceState({}, "", location.pathname);
+}else{
+  render();
+}
+</script>
+</body>
+</html>
